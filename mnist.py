@@ -67,6 +67,74 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x)
 
+class InputEncoder(nn.Module):
+    def __init__(self, outdim):
+        super(InputEncoder, self).__init__()
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(320, outdim)
+
+    def forward(self, x):
+        x = F.relu(F.max_pool2d(self.conv1(x), 2))
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = x.view(-1, 320)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        return x
+
+class OutputDecoder(nn.Module):
+    def __init__(self, indim):
+        super(OutputDecoder, self).__init__()
+        self.fc1 = nn.Linear(indim, 10)
+
+    def forward(self, x):
+        return F.log_softmax(self.fc1(x))
+
+def xavier_init(size):
+    in_dim = size[0]
+    xavier_stddev = 1. / np.sqrt(in_dim / 2.)
+    return Variable(torch.randn(*size) * xavier_stddev, requires_grad=True)
+
+class CF_prior(nn.Module):
+    def __init__(self, dim):
+        super(CF_prior, self).__init__()
+        self.k = dim
+        self.mu = xavier_init(self.k)
+        self.sigma = torch.exp(Variable(torch.zeros(self.k), requires_grad=True))
+
+    def forward(self, x):
+        # gaussian
+        # you could learn the mean and std
+        # check out https://wiseodd.github.io/techblog/2017/01/24/vae-pytorch/
+        # https://github.com/mlosch/pytorch-stats/blob/master/stats/estimation/map.py
+        # also look at how they did gans
+        two_pi_k = (2*np.pi)**k
+        det_sigma = torch.prod(self.sigma, 0)
+        constant = torch.rsqrt(torch.mul(det_sigma, two_pi_k))
+
+        diff = x - self.mu
+        exponent = -0.5 * torch.dot(diff * (1/self.sigma), diff)
+
+        prob = constant * torch.exp(exponent)
+        return prob
+
+
+class CF_likelihood(nn.Module):
+    def __init__(self, dim):
+        super(CF_likelihood, self).__init__()
+        self.fc1 = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        return F.relu(self.fc1(x))  # relu because MNIST > 0
+
+class Program(nn.Module):
+    def __init__(self, dim):
+        super(Program, self).__init__()
+
+    def forward(self, x):
+        return x
+
 
 def train(epoch, model, optimizer):
     model.train()
