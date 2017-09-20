@@ -150,10 +150,15 @@ class CF_likelihood(nn.Module):
         return F.relu(self.fc1(x))  # relu because MNIST > 0
 
 class Program(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim, k):
         super(Program, self).__init__()
 
+        self.priors = nn.ModuleList()
+        self.likelihoods = nn.ModuleList()
 
+        for kk in range(k):
+            self.priors.append(CF_prior(dim))
+            self.likelihoods.append(CF_likelihood(dim))
 
     def forward(self, x):
         return x

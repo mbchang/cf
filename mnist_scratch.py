@@ -3,6 +3,36 @@ from torch.autograd import Variable
 import numpy as np
 import torch.nn as nn
 
+def pdf(x, mu, logsigma):
+    """
+        x: (b, k)
+        mu: (k)
+        sigma: (k)
+
+        sigma2: diagonal entries of covariance entries
+    """
+    sigma2 = torch.exp(2*logsigma)
+    det_sigma = torch.prod(2*np.pi*sigma2, 0)
+    constant = torch.rsqrt(det_sigma)
+    diff = x - mu
+    exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
+    return constant * torch.exp(exponent)
+
+def log_pdf(x, mu, logsigma):
+    """
+        x: (b, k)
+        mu: (k)
+        sigma: (k)
+
+        sigma2: diagonal entries of covariance entries
+    """
+    sigma2 = torch.exp(2*logsigma)
+    det_sigma = torch.prod(2*np.pi*sigma2, 0)
+    constant = -0.5 * torch.log(det_sigma)
+    diff = x - mu
+    exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
+    return constant + exponent
+
 def xavier_init(size):
     in_dim = size[0]
     xavier_stddev = 1. / np.sqrt(in_dim / 2.)
@@ -53,40 +83,17 @@ class CF_prior(nn.Module):
         lp = self.log_pdf(x, self.mu, self.logsigma)
         return p, lp
 
+class CF_likelihood(nn.Module):
+    def __init__(self, dim):
+        super(CF_likelihood, self).__init__()
+        self.fc1 = nn.Linear(dim, dim)
 
-# good
-def pdf(x, mu, logsigma):
-    """
-        x: (b, k)
-        mu: (k)
-        sigma: (k)
-
-        sigma2: diagonal entries of covariance entries
-    """
-    sigma2 = torch.exp(2*logsigma)
-    det_sigma = torch.prod(2*np.pi*sigma2, 0)
-    constant = torch.rsqrt(det_sigma)
-    diff = x - mu
-    exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-    return constant * torch.exp(exponent)
-
-# good
-def log_pdf(x, mu, logsigma):
-    """
-        x: (b, k)
-        mu: (k)
-        sigma: (k)
-
-        sigma2: diagonal entries of covariance entries
-    """
-    sigma2 = torch.exp(2*logsigma)
-    det_sigma = torch.prod(2*np.pi*sigma2, 0)
-    constant = -0.5 * torch.log(det_sigma)
-    diff = x - mu
-    exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-    return constant + exponent
+    def forward(self, x):
+        return F.relu(self.fc1(x))  # relu because MNIST > 0
 
 
+##########################
+##########################
 def test_1():
     b = 1
     k = 3
@@ -97,7 +104,6 @@ def test_1():
     logsigma = Variable(torch.ones(k), requires_grad=True)
 
     train_manual(x, mu, logsigma)
-
 
 def test_2():
     b = 10
@@ -110,7 +116,6 @@ def test_2():
 
     train_manual(x, mu, logsigma)
 
-
 def test_3():
     b = 1
     k = 3
@@ -118,7 +123,6 @@ def test_3():
 
     prior = CF_prior(3)
     train_nn(x, prior)
-
 
 def test_4():
     b = 10
@@ -128,7 +132,6 @@ def test_4():
     prior = CF_prior(3)
     train_nn(x, prior)
 
-
 def test_5():
     b = 1
     k = 3
@@ -137,7 +140,6 @@ def test_5():
     prior = CF_prior(3)
     train_optim(x, prior)
 
-
 def test_6():
     b = 10
     k = 3
@@ -145,6 +147,14 @@ def test_6():
 
     prior = CF_prior(3)
     train_optim(x, prior)
+
+def test_7():
+    b = 10
+    k = 3
+    x = Variable(torch.randn(b, k), requires_grad=False)
+
+    likelihood = CF_likelihood()
+    train_optim_likelihood(x, likelihood)
 
 def train_nn(x, prior):
     lr = 1e-2
@@ -167,8 +177,7 @@ def train_nn(x, prior):
             param.data -= lr * param.grad.data
         print('#'*80) 
 
-
-def train_optim(x, prior):
+def train_optim_prior(x, prior):
     lr = 1e-2
     optimizer = torch.optim.Adam(prior.parameters(), lr=lr)
     for t in range(10):
@@ -188,7 +197,6 @@ def train_optim(x, prior):
         loss.backward()
         optimizer.step()
         print('#'*80) 
-
 
 def train_manual(x, mu, logsigma):
     lr = 1e-2
@@ -215,11 +223,32 @@ def train_manual(x, mu, logsigma):
         logsigma.data -= lr * logsigma.grad.data
         print('#'*80)
 
+def train_optim_likelihood(x, likelihood):
+    lr = 1e-2
+    optimizer = torch.optim.Adam(prior.parameters(), lr=lr)
+    loss = torch.MSELoss()
+    for t in range(10):
+        print(t)
+        print('fc1')
+        print(likelihood.fc1)
+
+        # forward
+        y = likelihood(x)
+        loss = loss(y, x)
+        print('loss: {}'.format(loss))
+
+        # backward
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        print('#'*80) 
+
+
 # test_1()
 # test_2()
 # test_3()
 # test_4()
 # test_5()
-test_6()
-
+# test_6()
+test_7()
 
