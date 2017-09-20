@@ -94,30 +94,51 @@ class OutputDecoder(nn.Module):
 def xavier_init(size):
     in_dim = size[0]
     xavier_stddev = 1. / np.sqrt(in_dim / 2.)
-    return Variable(torch.randn(*size) * xavier_stddev, requires_grad=True)
+    return nn.Parameter(torch.randn(*size) * xavier_stddev, requires_grad=True)
 
 class CF_prior(nn.Module):
     def __init__(self, dim):
         super(CF_prior, self).__init__()
         self.k = dim
-        self.mu = xavier_init(self.k)
-        self.sigma = torch.exp(Variable(torch.zeros(self.k), requires_grad=True))
+        self.mu = xavier_init([self.k])
+        self.logsigma = nn.Parameter(torch.ones(self.k), requires_grad=True)
+
+    # good
+    def pdf(self, x, mu, logsigma):
+        """
+            x: (b, k)
+            mu: (k)
+            sigma: (k)
+
+            sigma2: diagonal entries of covariance entries
+        """
+        sigma2 = torch.exp(2*logsigma)
+        det_sigma = torch.prod(2*np.pi*sigma2, 0)
+        constant = torch.rsqrt(det_sigma)
+        diff = x - mu
+        exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
+        return constant * torch.exp(exponent)
+
+    # good
+    def log_pdf(self, x, mu, logsigma):
+        """
+            x: (b, k)
+            mu: (k)
+            sigma: (k)
+
+            sigma2: diagonal entries of covariance entries
+        """
+        sigma2 = torch.exp(2*logsigma)
+        det_sigma = torch.prod(2*np.pi*sigma2, 0)
+        constant = -0.5 * torch.log(det_sigma)
+        diff = x - mu
+        exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
+        return constant + exponent
 
     def forward(self, x):
-        # gaussian
-        # you could learn the mean and std
-        # check out https://wiseodd.github.io/techblog/2017/01/24/vae-pytorch/
-        # https://github.com/mlosch/pytorch-stats/blob/master/stats/estimation/map.py
-        # also look at how they did gans
-        two_pi_k = (2*np.pi)**k
-        det_sigma = torch.prod(self.sigma, 0)
-        constant = torch.rsqrt(torch.mul(det_sigma, two_pi_k))
-
-        diff = x - self.mu
-        exponent = -0.5 * torch.dot(diff * (1/self.sigma), diff)
-
-        prob = constant * torch.exp(exponent)
-        return prob
+        p = self.pdf(x, self.mu, self.logsigma)
+        lp = self.log_pdf(x, self.mu, self.logsigma)
+        return p, lp
 
 
 class CF_likelihood(nn.Module):
@@ -131,6 +152,8 @@ class CF_likelihood(nn.Module):
 class Program(nn.Module):
     def __init__(self, dim):
         super(Program, self).__init__()
+
+
 
     def forward(self, x):
         return x
