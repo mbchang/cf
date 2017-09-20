@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
+from nets import InputEncoder, OutputDecoder, ProgramStep, Program
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -67,103 +68,6 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x)
 
-class InputEncoder(nn.Module):
-    def __init__(self, outdim):
-        super(InputEncoder, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, outdim)
-
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        return x
-
-class OutputDecoder(nn.Module):
-    def __init__(self, indim):
-        super(OutputDecoder, self).__init__()
-        self.fc1 = nn.Linear(indim, 10)
-
-    def forward(self, x):
-        return F.log_softmax(self.fc1(x))
-
-def xavier_init(size):
-    in_dim = size[0]
-    xavier_stddev = 1. / np.sqrt(in_dim / 2.)
-    return nn.Parameter(torch.randn(*size) * xavier_stddev, requires_grad=True)
-
-class CF_prior(nn.Module):
-    def __init__(self, dim):
-        super(CF_prior, self).__init__()
-        self.k = dim
-        self.mu = xavier_init([self.k])
-        self.logsigma = nn.Parameter(torch.ones(self.k), requires_grad=True)
-
-    # good
-    def pdf(self, x, mu, logsigma):
-        """
-            x: (b, k)
-            mu: (k)
-            sigma: (k)
-
-            sigma2: diagonal entries of covariance entries
-        """
-        sigma2 = torch.exp(2*logsigma)
-        det_sigma = torch.prod(2*np.pi*sigma2, 0)
-        constant = torch.rsqrt(det_sigma)
-        diff = x - mu
-        exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-        return constant * torch.exp(exponent)
-
-    # good
-    def log_pdf(self, x, mu, logsigma):
-        """
-            x: (b, k)
-            mu: (k)
-            sigma: (k)
-
-            sigma2: diagonal entries of covariance entries
-        """
-        sigma2 = torch.exp(2*logsigma)
-        det_sigma = torch.prod(2*np.pi*sigma2, 0)
-        constant = -0.5 * torch.log(det_sigma)
-        diff = x - mu
-        exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-        return constant + exponent
-
-    def forward(self, x):
-        p = self.pdf(x, self.mu, self.logsigma)
-        lp = self.log_pdf(x, self.mu, self.logsigma)
-        return p, lp
-
-
-class CF_likelihood(nn.Module):
-    def __init__(self, dim):
-        super(CF_likelihood, self).__init__()
-        self.fc1 = nn.Linear(dim, dim)
-
-    def forward(self, x):
-        return F.relu(self.fc1(x))  # relu because MNIST > 0
-
-class Program(nn.Module):
-    def __init__(self, dim, k):
-        super(Program, self).__init__()
-
-        self.priors = nn.ModuleList()
-        self.likelihoods = nn.ModuleList()
-
-        for kk in range(k):
-            self.priors.append(CF_prior(dim))
-            self.likelihoods.append(CF_likelihood(dim))
-
-    def forward(self, x):
-        return x
-
-
 def train(epoch, model, optimizer):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -198,7 +102,8 @@ def test(moel):
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
-model = Net()
+# model = Net()
+model = Program(64, 2, 1)
 if args.cuda:
     model.cuda()
 optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
