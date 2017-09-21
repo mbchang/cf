@@ -40,8 +40,6 @@ class CF_prior(nn.Module):
         self.mu = xavier_init([self.k])
         self.logsigma = nn.Parameter(torch.FloatTensor(self.k).fill_(0.1), requires_grad=True)
 
-
-    # good
     def pdf(self, x, mu, logsigma):
         """
             x: (b, k)
@@ -57,7 +55,6 @@ class CF_prior(nn.Module):
         exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
         return constant * torch.exp(exponent)
 
-    # good
     def log_pdf(self, x, mu, logsigma):
         """
             x: (b, k)
@@ -70,20 +67,11 @@ class CF_prior(nn.Module):
         constant = -0.5 * torch.sum(torch.log(2*np.pi*sigma2))
         diff = x - mu
         exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-        # both mu and logsigma become nan for some reason
         return constant + exponent
 
     def forward(self, x):
-        lp = self.log_pdf(x, self.mu, self.logsigma)  # PROBLEM basically this thing gets very very negative.
-        # subtract max
-        maxlp = torch.max(lp)
-        lp -= maxlp
-        # exponentiate
-        p = torch.exp(lp)
-        # renormalize
-        z = torch.sum(p)
-        p = torch.div(p, z)
-        return p
+        lp = self.log_pdf(x, self.mu, self.logsigma)
+        return lp
 
 class CF_likelihood(nn.Module):
     def __init__(self, dim):
@@ -91,7 +79,7 @@ class CF_likelihood(nn.Module):
         self.fc1 = nn.Linear(dim, dim)
 
     def forward(self, x):
-        return F.sigmoid(self.fc1(x))
+        return F.sigmoid(self.fc1(x))  # relu because MNIST > 0
 
 class ProgramStep(nn.Module):
     def __init__(self, dim, k):
@@ -108,10 +96,16 @@ class ProgramStep(nn.Module):
 
     def forward(self, x):
         # get weights
-        ps = [prior(x) for prior in self.priors]  # list of size k of b
-        z = torch.sum(torch.stack(ps), 0)  # b
+        lps = [prior(x) for prior in self.priors]  # list of size k of b
+        # subtract max
+        lps = torch.stack(lps)  # (k, b)
+        lps_max = torch.squeeze(torch.max(lps, 0)[0])  # b
+        lps -= lps_max  # (k, b)
+        # exponentiate
+        ps = torch.exp(lps)  # (k, b)
+        # renormalize
+        z = torch.sum(ps, 0)  # b
         ws = [p/z for p in ps]  # list of size k of b
-
         # compute next
         ys = [ws[i].view(-1, 1).repeat(1, self.dim)*self.likelihoods[i](x) for i in range(len(ws))]  # list of size k of (b, dim)
         y = torch.sum(torch.stack(ys), 0)  # (b, dim)

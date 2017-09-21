@@ -28,7 +28,7 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--computation-steps', type=int, default=1,
                     help='number of computation steps to run')
-parser.add_argument('--computation-features', type=int, default=1,
+parser.add_argument('--computation-features', type=int, default=2,
                     help='number of computation features')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -83,12 +83,11 @@ def train(epoch, model, optimizer):
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
+
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.data[0]))
-
-        # gradients for mu becomes really small and sigma becomes really small
 
 def test(model):
     model.eval()

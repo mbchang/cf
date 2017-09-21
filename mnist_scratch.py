@@ -4,6 +4,8 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
+torch.manual_seed(0)
+
 def pdf(x, mu, logsigma):
     """
         x: (b, k)
@@ -17,7 +19,28 @@ def pdf(x, mu, logsigma):
     constant = torch.rsqrt(det_sigma)
     diff = x - mu
     exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-    return constant * torch.exp(exponent)
+    out = constant * torch.exp(exponent)
+
+
+
+
+    # ce = log_pdf(x, mu, logsigma)
+    # z = torch.sum(ce, 1)
+    # print(ce)
+    # print('z')
+    # print(z)
+    # ce = torch.div(ce, z.view(-1,1).repeat(1,3))
+    # print('ce after div')
+    # print(ce)
+    # # out = 
+    # # exponentiate somewhere here
+
+
+
+    # print('prob')
+    # print(out)
+    # assert False
+    return out
 
 def log_pdf(x, mu, logsigma):
     """
@@ -31,7 +54,23 @@ def log_pdf(x, mu, logsigma):
     constant = -0.5 * torch.sum(torch.log(2*np.pi*sigma2))
     diff = x - mu
     exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-    return constant + exponent
+    out = constant + exponent
+
+    # # this should be the same as:
+    # constants = -0.5*torch.log(2*np.pi*sigma2)
+    # exponents = -0.5*diff*diff/sigma2
+    # ce = constants + exponents
+    # max_ce = torch.max(ce,1)[0]  # b
+    # print('ce')
+    # print(ce)
+    # print('max_ce')
+    # print(max_ce)
+    # ce -= max_ce.view(-1, 1).repeat(1, 3)
+    # print('ce')
+    # print(ce)
+    # # assert False
+    # # out2 = torch.sum(ce,1)
+    return out
 
 def xavier_init(size):
     in_dim = size[0]
@@ -157,7 +196,7 @@ class Program(nn.Module):
 ##########################
 ##########################
 def test_1():
-    b = 1
+    b = 2
     k = 3
     x = Variable(torch.randn(b, k), requires_grad=False)
 
