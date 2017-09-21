@@ -68,6 +68,8 @@ class CF_prior(nn.Module):
 
             sigma2: diagonal entries of covariance entries
         """
+        # OK WE ACTUALLY HAVE TO DO THE MAX THING HERE!
+
         sigma2 = torch.exp(2*logsigma)
         constant = -0.5 * torch.sum(torch.log(2*np.pi*sigma2))
         diff = x - mu
@@ -86,21 +88,27 @@ class CF_prior(nn.Module):
     def forward(self, x):
         # p = self.pdf(x, self.mu, self.logsigma)
         lp = self.log_pdf(x, self.mu, self.logsigma)  # PROBLEM basically this thing gets very very negative.
+        # # print(lp)
+        # # assert False
+        # # subtract max
+        # maxlp = torch.max(lp)  # don't do this because this is over the batch?  # okay, we are getting 
+        # # print('maxlp')
+        # # print(maxlp.data[0])
+        # lp -= maxlp
+        # print('lp')
         # print(lp)
-        # assert False
-        # subtract max
-        maxlp = torch.max(lp)  # don't do this because this is over the batch?  # okay, we are getting 
-        # print('maxlp')
-        # print(maxlp.data[0])
-        lp -= maxlp
-        print('lp')
-        print(lp)
-        # exponentiate
-        p = torch.exp(lp)
-        # renormalize
-        z = torch.sum(p)
-        p = torch.div(p, z)
-        return p#, lp
+        # # exponentiate
+        # p = torch.exp(lp)
+        # print('p before renormalize')
+        # print(p)
+        # # renormalize
+        # z = torch.sum(p)  # this should not be over the batch!  # you shoudln't normalize acoss x's!
+        # print('z prior')
+        # print(z)
+        # p = torch.div(p, z)
+        # print('p after renomralize')
+        # print(p)
+        return lp#, lp
 
 class CF_likelihood(nn.Module):
     def __init__(self, dim):
@@ -125,14 +133,37 @@ class ProgramStep(nn.Module):
 
     def forward(self, x):
         # get weights  good
-        ps = [prior(x) for prior in self.priors]  # list of size k of b
-        z = torch.sum(torch.stack(ps), 0)  # b
-        print('z')
-        print(z)
-        ws = [p/z for p in ps]  # list of size k of b
-        print('ws')
-        print(ws)
+        lps = [prior(x) for prior in self.priors]  # list of size k of b
 
+        # here you have the log probabiities
+        # print('lps yo')
+        # print(lps)
+        lps = torch.stack(lps)
+        # print('stack')
+        # print(lps)
+        lps_max = torch.max(lps, 0)[0]
+        # print('lps max')
+        # print(lps_max)
+        lps -= lps_max
+        # print('subtract')
+        # print(lps)
+        ps = torch.exp(lps)
+        # print('exp')
+        # print(ps)
+        z = torch.sum(ps, 0)
+        # print('z')
+        # print(z)
+        # assert False
+
+
+        # z = torch.sum(torch.stack(ps), 0)  # b
+        # print('z')
+        # print(z)
+        ws = [p/z for p in ps]  # list of size k of b
+        # print('ws')
+        # print(ws)
+
+        # assert False
         # compute next  good
         ys = [ws[i].view(-1, 1).repeat(1, self.dim)*self.likelihoods[i](x) for i in range(len(ws))]  # list of size k of (b, dim)
         y = torch.sum(torch.stack(ys), 0)  # (b, dim)

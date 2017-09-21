@@ -80,22 +80,22 @@ def train(epoch, model, optimizer):
         loss.backward()
         optimizer.step()
 
-        prior_dict = {}
-        for k, v in model.named_parameters():
-            if 'prior' in k:
-                prior_dict[k] = v
-        print('prior_dict')
-        # print(prior_dict)
-        for k, v in prior_dict.iteritems():
-            print(k)
-            print(v.grad.data)
-            print(v.data)
-        print('loss')
-        print(loss)  # loss is nan
-        print('output')
-        print(output)  # some of outputs would be nan
-        print('target')
-        print(target)
+        # prior_dict = {}
+        # for k, v in model.named_parameters():
+        #     if 'prior' in k:
+        #         prior_dict[k] = v
+        # print('prior_dict')
+        # # print(prior_dict)
+        # for k, v in prior_dict.iteritems():
+        #     print(k)
+        #     print(v.grad.data)
+        #     print(v.data)
+        # print('loss')
+        # print(loss)  # loss is nan
+        # print('output')
+        # print(output)  # some of outputs would be nan
+        # print('target')
+        # print(target)
 
 
         # assert False
@@ -126,7 +126,7 @@ def test(model):
         100. * correct / len(test_loader.dataset)))
 
 # model = Net()
-model = Program(64, 3, 2)
+model = Program(64, 2, 1)
 if args.cuda:
     model.cuda()
 optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
