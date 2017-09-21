@@ -80,32 +80,10 @@ def train(epoch, model, optimizer):
         loss.backward()
         optimizer.step()
 
-        # prior_dict = {}
-        # for k, v in model.named_parameters():
-        #     if 'prior' in k:
-        #         prior_dict[k] = v
-        # print('prior_dict')
-        # # print(prior_dict)
-        # for k, v in prior_dict.iteritems():
-        #     print(k)
-        #     print(v.grad.data)
-        #     print(v.data)
-        # print('loss')
-        # print(loss)  # loss is nan
-        # print('output')
-        # print(output)  # some of outputs would be nan
-        # print('target')
-        # print(target)
-
-
-        # assert False
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.data[0]))
-
-
-# gradients for mu becomes really small and sigma becomes really small
 
 def test(model):
     model.eval()

@@ -26,8 +26,6 @@ class OutputDecoder(nn.Module):
         self.fc1 = nn.Linear(indim, 10)
 
     def forward(self, x):
-        # print('x')
-        # print(x)
         return F.log_softmax(self.fc1(x))
 
 def xavier_init(size):
@@ -42,8 +40,6 @@ class CF_prior(nn.Module):
         self.mu = xavier_init([self.k])
         self.logsigma = nn.Parameter(torch.FloatTensor(self.k).fill_(0.1), requires_grad=True)
 
-
-    # good
     def pdf(self, x, mu, logsigma):
         """
             x: (b, k)
@@ -59,7 +55,6 @@ class CF_prior(nn.Module):
         exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
         return constant * torch.exp(exponent)
 
-    # good
     def log_pdf(self, x, mu, logsigma):
         """
             x: (b, k)
@@ -68,47 +63,15 @@ class CF_prior(nn.Module):
 
             sigma2: diagonal entries of covariance entries
         """
-        # OK WE ACTUALLY HAVE TO DO THE MAX THING HERE!
-
         sigma2 = torch.exp(2*logsigma)
         constant = -0.5 * torch.sum(torch.log(2*np.pi*sigma2))
         diff = x - mu
         exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
-        # both mu and logsigma become nan for some reason
-        # print('mu')
-        # print(mu)
-        # print('logsigma')
-        # print(logsigma)
-        # print('constant')
-        # print(constant)
-        # print('exponent')
-        # print(exponent)
         return constant + exponent
 
     def forward(self, x):
-        # p = self.pdf(x, self.mu, self.logsigma)
-        lp = self.log_pdf(x, self.mu, self.logsigma)  # PROBLEM basically this thing gets very very negative.
-        # # print(lp)
-        # # assert False
-        # # subtract max
-        # maxlp = torch.max(lp)  # don't do this because this is over the batch?  # okay, we are getting 
-        # # print('maxlp')
-        # # print(maxlp.data[0])
-        # lp -= maxlp
-        # print('lp')
-        # print(lp)
-        # # exponentiate
-        # p = torch.exp(lp)
-        # print('p before renormalize')
-        # print(p)
-        # # renormalize
-        # z = torch.sum(p)  # this should not be over the batch!  # you shoudln't normalize acoss x's!
-        # print('z prior')
-        # print(z)
-        # p = torch.div(p, z)
-        # print('p after renomralize')
-        # print(p)
-        return lp#, lp
+        lp = self.log_pdf(x, self.mu, self.logsigma)
+        return lp
 
 class CF_likelihood(nn.Module):
     def __init__(self, dim):
@@ -132,39 +95,18 @@ class ProgramStep(nn.Module):
             self.likelihoods.append(CF_likelihood(dim))
 
     def forward(self, x):
-        # get weights  good
+        # get weights
         lps = [prior(x) for prior in self.priors]  # list of size k of b
-
-        # here you have the log probabiities
-        # print('lps yo')
-        # print(lps)
-        lps = torch.stack(lps)
-        # print('stack')
-        # print(lps)
-        lps_max = torch.max(lps, 0)[0]
-        # print('lps max')
-        # print(lps_max)
-        lps -= lps_max
-        # print('subtract')
-        # print(lps)
-        ps = torch.exp(lps)
-        # print('exp')
-        # print(ps)
-        z = torch.sum(ps, 0)
-        # print('z')
-        # print(z)
-        # assert False
-
-
-        # z = torch.sum(torch.stack(ps), 0)  # b
-        # print('z')
-        # print(z)
+        # subtract max
+        lps = torch.stack(lps)  # (k, b)
+        lps_max = torch.squeeze(torch.max(lps, 0)[0])  # b
+        lps -= lps_max  # (k, b)
+        # exponentiate
+        ps = torch.exp(lps)  # (k, b)
+        # renormalize
+        z = torch.sum(ps, 0)  # b
         ws = [p/z for p in ps]  # list of size k of b
-        # print('ws')
-        # print(ws)
-
-        # assert False
-        # compute next  good
+        # compute next
         ys = [ws[i].view(-1, 1).repeat(1, self.dim)*self.likelihoods[i](x) for i in range(len(ws))]  # list of size k of (b, dim)
         y = torch.sum(torch.stack(ys), 0)  # (b, dim)
         return y
