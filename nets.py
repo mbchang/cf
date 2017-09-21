@@ -26,6 +26,8 @@ class OutputDecoder(nn.Module):
         self.fc1 = nn.Linear(indim, 10)
 
     def forward(self, x):
+        # print('x')
+        # print(x)
         return F.log_softmax(self.fc1(x))
 
 def xavier_init(size):
@@ -71,19 +73,34 @@ class CF_prior(nn.Module):
         diff = x - mu
         exponent = -0.5 * torch.sum(diff*diff/sigma2, 1)
         # both mu and logsigma become nan for some reason
+        # print('mu')
+        # print(mu)
+        # print('logsigma')
+        # print(logsigma)
+        # print('constant')
+        # print(constant)
+        # print('exponent')
+        # print(exponent)
         return constant + exponent
 
     def forward(self, x):
+        # p = self.pdf(x, self.mu, self.logsigma)
         lp = self.log_pdf(x, self.mu, self.logsigma)  # PROBLEM basically this thing gets very very negative.
+        # print(lp)
+        # assert False
         # subtract max
-        maxlp = torch.max(lp)
+        maxlp = torch.max(lp)  # don't do this because this is over the batch?  # okay, we are getting 
+        # print('maxlp')
+        # print(maxlp.data[0])
         lp -= maxlp
+        print('lp')
+        print(lp)
         # exponentiate
         p = torch.exp(lp)
         # renormalize
         z = torch.sum(p)
         p = torch.div(p, z)
-        return p
+        return p#, lp
 
 class CF_likelihood(nn.Module):
     def __init__(self, dim):
@@ -91,7 +108,7 @@ class CF_likelihood(nn.Module):
         self.fc1 = nn.Linear(dim, dim)
 
     def forward(self, x):
-        return F.sigmoid(self.fc1(x))
+        return F.sigmoid(self.fc1(x))  # relu because MNIST > 0
 
 class ProgramStep(nn.Module):
     def __init__(self, dim, k):
@@ -107,12 +124,16 @@ class ProgramStep(nn.Module):
             self.likelihoods.append(CF_likelihood(dim))
 
     def forward(self, x):
-        # get weights
+        # get weights  good
         ps = [prior(x) for prior in self.priors]  # list of size k of b
         z = torch.sum(torch.stack(ps), 0)  # b
+        print('z')
+        print(z)
         ws = [p/z for p in ps]  # list of size k of b
+        print('ws')
+        print(ws)
 
-        # compute next
+        # compute next  good
         ys = [ws[i].view(-1, 1).repeat(1, self.dim)*self.likelihoods[i](x) for i in range(len(ws))]  # list of size k of (b, dim)
         y = torch.sum(torch.stack(ys), 0)  # (b, dim)
         return y
