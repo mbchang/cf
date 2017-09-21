@@ -26,6 +26,10 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
+parser.add_argument('--computation-steps', type=int, default=1,
+                    help='number of computation steps to run')
+parser.add_argument('--computation-features', type=int, default=1,
+                    help='number of computation features')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -105,7 +109,7 @@ def test(model):
         100. * correct / len(test_loader.dataset)))
 
 # model = Net()
-model = Program(64, 3, 2)
+model = Program(64, args.computation_features, args.computation_steps)
 if args.cuda:
     model.cuda()
 optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
